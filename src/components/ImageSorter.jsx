@@ -5,6 +5,7 @@ import { toPng } from 'html-to-image';
 
 const ImageSorter = ({ uploadedImage }) => {
   const canvasRef = useRef(null);
+  const [isSorting, setIsSorting] = useState(false);
   const [isSorted, setIsSorted] = useState(false);
 
   useEffect(() => {
@@ -22,34 +23,52 @@ const ImageSorter = ({ uploadedImage }) => {
     setIsSorted(false);
   };
 
-  const sortPixels = () => {
+  const sortPixels = async () => {
+    setIsSorting(true);
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const { data } = imageData;
 
+    const pixelArray = [];
     for (let i = 0; i < data.length; i += 4) {
-      const r = data[i];
-      const g = data[i + 1];
-      const b = data[i + 2];
-      const hsl = rgbToHsl(r, g, b);
-      data[i + 3] = Math.floor(hsl[0] * 255); // Use hue for sorting
+      pixelArray.push({
+        r: data[i],
+        g: data[i + 1],
+        b: data[i + 2],
+        a: data[i + 3],
+        index: i,
+      });
     }
 
-    const sortedIndices = new Array(data.length / 4)
-      .fill()
-      .map((_, i) => i)
-      .sort((a, b) => data[b * 4 + 3] - data[a * 4 + 3]);
-
-    const sortedData = new Uint8ClampedArray(data.length);
-    sortedIndices.forEach((srcIndex, destIndex) => {
-      sortedData[destIndex * 4] = data[srcIndex * 4];
-      sortedData[destIndex * 4 + 1] = data[srcIndex * 4 + 1];
-      sortedData[destIndex * 4 + 2] = data[srcIndex * 4 + 2];
-      sortedData[destIndex * 4 + 3] = 255;
+    const sortedPixels = pixelArray.sort((a, b) => {
+      const hslA = rgbToHsl(a.r, a.g, a.b);
+      const hslB = rgbToHsl(b.r, b.g, b.b);
+      return hslB[0] - hslA[0];
     });
 
-    ctx.putImageData(new ImageData(sortedData, canvas.width, canvas.height), 0, 0);
+    const totalSteps = 100;
+    const delay = 3000 / totalSteps;
+
+    for (let step = 0; step <= totalSteps; step++) {
+      await new Promise(resolve => setTimeout(resolve, delay));
+
+      const progress = step / totalSteps;
+      const newData = new Uint8ClampedArray(data.length);
+
+      for (let i = 0; i < sortedPixels.length; i++) {
+        const pixel = sortedPixels[i];
+        const targetIndex = Math.floor(i * progress + pixel.index * (1 - progress));
+        newData[targetIndex] = pixel.r;
+        newData[targetIndex + 1] = pixel.g;
+        newData[targetIndex + 2] = pixel.b;
+        newData[targetIndex + 3] = pixel.a;
+      }
+
+      ctx.putImageData(new ImageData(newData, canvas.width, canvas.height), 0, 0);
+    }
+
+    setIsSorting(false);
     setIsSorted(true);
   };
 
@@ -93,8 +112,8 @@ const ImageSorter = ({ uploadedImage }) => {
     <div className="space-y-4">
       <canvas ref={canvasRef} className="max-w-full h-auto mx-auto border border-gray-300" />
       <div className="flex justify-center space-x-4">
-        <Button onClick={sortPixels} disabled={isSorted}>
-          Sort Pixels
+        <Button onClick={sortPixels} disabled={isSorting || isSorted}>
+          {isSorting ? 'Sorting...' : 'Sort Pixels'}
         </Button>
         <Button onClick={downloadImage} disabled={!isSorted}>
           <Download className="mr-2 h-4 w-4" /> Download Sorted Image
