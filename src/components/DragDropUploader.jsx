@@ -12,7 +12,10 @@ const DragDropUploader = ({ setUploadedImage }) => {
     }
   }, [setUploadedImage]);
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop, accept: 'image/*' });
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({ 
+    onDrop, 
+    accept: {'image/*': []}
+  });
 
   return (
     <div
